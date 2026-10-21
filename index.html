@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SoundBoard Studio · In-browser beat maker</title>
+<meta name="description" content="Tap pads, build loops in a step sequencer, layer drums and melodies, and export your beat as WAV. Free, offline, runs entirely in your browser.">
+<meta name="theme-color" content="#07060d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="icon.svg" alt="" width="30" height="30"><div><b>SoundBoard</b><span>Studio</span></div></div>
+  <input id="projName" class="projname" aria-label="Project name" maxlength="80" spellcheck="false">
+  <div class="transport">
+    <button id="playBtn" class="btn play" title="Play / stop (Space)" aria-label="Play"><svg viewBox="0 0 24 24"><path class="i-play" d="M7 4l13 8-13 8z"/><path class="i-stop" d="M6 6h12v12H6z"/></svg></button>
+    <button id="recBtn" class="btn rec" title="Live record pad hits into the pattern (R with Shift)" aria-pressed="false"><span class="dot"></span>Rec</button>
+    <label class="field bpm"><span>BPM</span><input id="bpm" type="number" min="60" max="200" step="1" inputmode="numeric"></label>
+    <input id="bpmRange" type="range" min="60" max="200" step="1" aria-label="Tempo" class="bpmrange">
+    <button id="tapBtn" class="btn" title="Tap tempo (T)">Tap</button>
+    <label class="field swing"><span>Swing <output id="swingOut">0%</output></span><input id="swing" type="range" min="0" max="75" step="1"></label>
+  </div>
+  <div class="actions">
+    <button id="undoBtn" class="btn icon" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
+    <button id="redoBtn" class="btn icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
+    <select id="presetSel" class="btn" aria-label="Load a demo beat"><option value="">Demo beats…</option></select>
+    <button id="projBtn" class="btn">Projects</button>
+    <button id="shareBtn" class="btn">Share</button>
+    <button id="exportBtn" class="btn accent">Export</button>
+  </div>
+</header>
+
+<main>
+  <section class="panel pads-panel" aria-label="Pads">
+    <div class="panel-head"><h2>Pads</h2><span class="hint">Keys 1-4 · Q-R · A-F · Z-V</span></div>
+    <div id="pads" class="pads"></div>
+    <div class="padopts">
+      <label class="field"><span>Key</span><select id="keySel"></select></label>
+      <label class="field"><span>Scale</span><select id="scaleSel"></select></label>
+    </div>
+  </section>
+
+  <section class="panel seq-panel" aria-label="Step sequencer">
+    <div class="panel-head">
+      <div class="patterns" role="group" aria-label="Pattern">
+        <span class="lbl">Pattern</span>
+        <button class="pat" data-pat="A">A</button><button class="pat" data-pat="B">B</button><button class="pat" data-pat="C">C</button><button class="pat" data-pat="D">D</button>
+      </div>
+      <div class="seqopts">
+        <div class="seg" role="group" aria-label="Steps"><button data-steps="16">16</button><button data-steps="32">32</button></div>
+        <div class="seg" role="group" aria-label="Velocity for new steps" title="Velocity for new steps. Right-click (or long-press) a step to cycle its velocity."><span class="lbl">Vel</span><button data-vel="1">100</button><button data-vel="0.7">70</button><button data-vel="0.4">40</button></div>
+        <label class="toggle" title="Play the song chain instead of one pattern"><input type="checkbox" id="songMode"><span>Song</span></label>
+        <button id="clearBtn" class="btn small" title="Clear this pattern">Clear</button>
+      </div>
+    </div>
+    <div class="seq-wrap"><div id="seq" class="seq"></div></div>
+  </section>
+
+  <section class="panel tabs-panel">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="roll" aria-selected="true">Piano roll</button>
+      <button role="tab" data-tab="mixer">Mixer</button>
+      <button role="tab" data-tab="song">Song</button>
+    </div>
+    <div id="tab-roll" class="tab">
+      <div class="rollbar">
+        <div class="seg" id="rollTracks" role="group" aria-label="Instrument"></div>
+        <div class="seg" role="group" aria-label="Note length"><span class="lbl">Length</span><button data-len="1">1</button><button data-len="2">2</button><button data-len="4">4</button><button data-len="8">8</button></div>
+        <label class="toggle" title="Only show notes in the chosen key and scale"><input type="checkbox" id="scaleLock" checked><span>Scale lock</span></label>
+      </div>
+      <div class="roll-wrap"><div id="roll" class="roll"></div></div>
+    </div>
+    <div id="tab-mixer" class="tab" hidden>
+      <div class="masterbar">
+        <label class="field grow"><span>Master <output id="masterOut"></output></span><input id="master" type="range" min="0" max="1" step="0.01"></label>
+        <div class="limiter" title="Limiter gain reduction"><span>Limiter</span><div class="meter"><i id="limMeter"></i></div></div>
+      </div>
+      <div id="mixer" class="mixer"></div>
+    </div>
+    <div id="tab-song" class="tab" hidden>
+      <p class="muted">Chain patterns into a song, then switch on <b>Song</b> to play the chain. Export can render the whole song.</p>
+      <div id="chain" class="chain"></div>
+      <div class="chainbar">
+        <span class="lbl">Add</span><button class="btn small" data-add="A">+A</button><button class="btn small" data-add="B">+B</button><button class="btn small" data-add="C">+C</button><button class="btn small" data-add="D">+D</button>
+        <button class="btn small" id="chainPop">Remove last</button><button class="btn small" id="chainClear">Reset</button>
+      </div>
+      <div class="chainbar"><span class="lbl">Copy pattern <b id="copyFrom">A</b> to</span><button class="btn small" data-copy="A">A</button><button class="btn small" data-copy="B">B</button><button class="btn small" data-copy="C">C</button><button class="btn small" data-copy="D">D</button></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>Free &amp; open source (MIT) · works offline · nothing leaves your device</span>
+  <a href="https://github.com/shaikbasha1437/soundboard-studio" target="_blank" rel="noopener">Source on GitHub</a>
+</footer>
+
+<dialog id="exportDlg" class="dlg">
+  <form method="dialog">
+    <h3>Export audio</h3>
+    <label class="field"><span>What to render</span><select id="expRange"><option value="pattern">Current pattern</option><option value="song">Song chain</option></select></label>
+    <label class="field"><span>Repeat</span><select id="expLoops"><option>1</option><option selected>2</option><option>4</option><option>8</option></select></label>
+    <p class="muted" id="expInfo"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn accent" id="wavBtn">Download WAV</button>
+      <button type="button" class="btn" id="webmBtn" title="Records the live output in real time">Record live (WebM)</button>
+      <button class="btn" value="close">Close</button>
+    </div>
+    <p class="status" id="expStatus" role="status"></p>
+  </form>
+</dialog>
+
+<dialog id="projDlg" class="dlg">
+  <form method="dialog">
+    <h3>Projects</h3>
+    <div class="row"><button type="button" class="btn accent" id="saveLocal">Save in this browser</button><button type="button" class="btn" id="newProj">New</button></div>
+    <ul id="savedList" class="saved"></ul>
+    <div class="row"><button type="button" class="btn" id="dlJson">Download .json</button><label class="btn file">Open .json<input type="file" id="openJson" accept=".json,application/json" hidden></label></div>
+    <p class="muted">Your current beat is also autosaved in this browser.</p>
+    <div class="dlg-actions"><button class="btn" value="close">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="shareDlg" class="dlg">
+  <form method="dialog">
+    <h3>Share this pattern</h3>
+    <p class="muted">The link holds the current pattern, tempo, key and mix settings. Anyone who opens it hears your beat; nothing is uploaded.</p>
+    <input id="shareUrl" readonly class="shareurl" aria-label="Share link">
+    <div class="dlg-actions"><button type="button" class="btn accent" id="copyShare">Copy link</button><button class="btn" value="close">Close</button></div>
+    <p class="status" id="shareStatus" role="status"></p>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="core.js"></script>
+<script src="presets.js"></script>
+<script src="synth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
